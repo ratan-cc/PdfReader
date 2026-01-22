@@ -12,65 +12,61 @@ public class PdfParserService {
 
     public List<EmployeeShift> parse(String text) {
 
-        List<EmployeeShift> list = new ArrayList<>();
+        List<EmployeeShift> result = new ArrayList<>();
 
         // Store number
         Matcher storeMatcher =
                 Pattern.compile("Store\\s+#(\\d+)").matcher(text);
         String store = storeMatcher.find() ? storeMatcher.group(1) : "";
 
-        // Employee block
+        // Employee blocks
         Pattern empPattern = Pattern.compile(
                 "(\\d+)([A-Z ]+)\\s+HolDTOTRegID([\\s\\S]*?)(?=\\n\\d+[A-Z ]+ HolDTOTRegID|TOTAL HOURS)",
                 Pattern.MULTILINE
         );
 
-        Matcher matcher = empPattern.matcher(text);
+        Matcher empMatcher = empPattern.matcher(text);
 
-        while (matcher.find()) {
+        while (empMatcher.find()) {
 
-            EmployeeShift e = new EmployeeShift();
-            e.setStoreNumber(store);
-            e.setName(matcher.group(2).trim());
+            String employeeName = empMatcher.group(2).trim();
+            String block = empMatcher.group(3);
 
-            String block = matcher.group(3);
-
-            // Business Day
-            Matcher day = Pattern.compile(
+            // Business day
+            Matcher dayMatcher = Pattern.compile(
                     "(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)"
             ).matcher(block);
-            if (day.find()) e.setBusinessDay(day.group());
+            String businessDay = dayMatcher.find() ? dayMatcher.group() : "";
 
-            // Job ID (first numeric after Clock-out/Clock-in)
-            Matcher jobMatcher = Pattern.compile(
-                    "\\b(\\d{1,3})\\b"
-            ).matcher(block);
-            if (jobMatcher.find()) e.setJobId(jobMatcher.group(1));
+            // CLOCK ROW pattern (THIS IS THE FIX)
+            Pattern clockRowPattern = Pattern.compile(
+                    "(Clock-in|Break Clock-in)\\s+" +
+                            "(Break|Clock-out)\\s+" +
+                            "(\\d+)\\s+" +
+                            ".*?(\\d{1,2}:\\d{2}(AM|PM)).*?" +
+                            "(\\d{1,2}:\\d{2}(AM|PM))"
+            );
 
-            // In Type
-            Matcher inTypeMatcher = Pattern.compile(
-                    "(Clock-in|Break Clock-in|Break)"
-            ).matcher(block);
-            if (inTypeMatcher.find()) e.setInType(inTypeMatcher.group());
+            Matcher clockMatcher = clockRowPattern.matcher(block);
 
-            // Out Type
-            Matcher outTypeMatcher = Pattern.compile(
-                    "(Clock-out|Break Clock-out)"
-            ).matcher(block);
-            if (outTypeMatcher.find()) e.setOutType(outTypeMatcher.group());
+            while (clockMatcher.find()) {
 
-            // Clock In
-            Matcher timeMatcher = Pattern.compile(
-                    "(\\d{1,2}:\\d{2}(AM|PM))"
-            ).matcher(block);
+                EmployeeShift entry = new EmployeeShift();
 
-            if (timeMatcher.find()) e.setClockIn(timeMatcher.group());
-            if (timeMatcher.find()) e.setClockOut(timeMatcher.group());
+                entry.setStoreNumber(store);
+                entry.setName(employeeName);
+                entry.setBusinessDay(businessDay);
 
-            list.add(e);
+                entry.setInType(clockMatcher.group(1));
+                entry.setOutType(clockMatcher.group(2));
+                entry.setJobId(clockMatcher.group(3));
+                entry.setClockIn(clockMatcher.group(4));
+                entry.setClockOut(clockMatcher.group(6));
+
+                result.add(entry);
+            }
         }
 
-        return list;
+        return result;
     }
 }
-

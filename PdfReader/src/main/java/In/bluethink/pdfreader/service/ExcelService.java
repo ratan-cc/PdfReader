@@ -8,6 +8,10 @@ import org.springframework.stereotype.Service;
 
 import java.io.FileOutputStream;
 import java.util.List;
+import org.apache.poi.ss.usermodel.*;
+import java.io.File;
+
+
 @Service
 public class ExcelService {
 
@@ -16,13 +20,26 @@ public class ExcelService {
 
     public void generate(List<EmployeeShift> data) throws Exception {
 
+        // ✅ Ensure output directory exists
+        File file = new File(outputPath);
+        File parentDir = file.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            parentDir.mkdirs();
+        }
+
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("SignOff");
 
         Row header = sheet.createRow(0);
         String[] headers = {
-                "Store", "Name", "Business Day",
-                "Clock In", "Clock Out", "Job ID"
+                "Store",
+                "Employee Name",
+                "Business Day",
+                "In Type",
+                "Out Type",
+                "Clock In",
+                "Clock Out",
+                "Job ID"
         };
 
         for (int i = 0; i < headers.length; i++) {
@@ -32,26 +49,23 @@ public class ExcelService {
         int rowNum = 1;
         for (EmployeeShift e : data) {
             Row row = sheet.createRow(rowNum++);
+
             row.createCell(0).setCellValue(e.getStoreNumber());
             row.createCell(1).setCellValue(e.getName());
             row.createCell(2).setCellValue(e.getBusinessDay());
-            row.createCell(3).setCellValue(e.getClockIn());
-            row.createCell(4).setCellValue(e.getClockOut());
-            row.createCell(5).setCellValue(e.getInType());
-            row.createCell(6).setCellValue(e.getOutType());
+            row.createCell(3).setCellValue(e.getInType());
+            row.createCell(4).setCellValue(e.getOutType());
+            row.createCell(5).setCellValue(e.getClockIn());
+            row.createCell(6).setCellValue(e.getClockOut());
             row.createCell(7).setCellValue(e.getJobId());
-
         }
 
-        try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+        try (FileOutputStream fos = new FileOutputStream(file)) {
             workbook.write(fos);
         }
 
         workbook.close();
-        System.out.println("Excel generated at: " + outputPath);
-    }
 
-    public void generate(List<EmployeeShift> data, String s) {
+        System.out.println("✅ Excel generated at: " + file.getAbsolutePath());
     }
-
 }

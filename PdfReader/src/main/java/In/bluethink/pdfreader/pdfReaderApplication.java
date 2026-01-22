@@ -36,9 +36,10 @@ public class pdfReaderApplication implements CommandLineRunner {
         try {
             String text = reader.readPdf();
             List<EmployeeShift> data = parser.parse(text);
-            excel.generate(data, "output/Detail Sign Off Report.xlsx");
+            excel.generate(data);
         } catch (Exception e) {
             System.err.println("PDF processing failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
