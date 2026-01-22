@@ -35,10 +35,15 @@ public class pdfReaderApplication implements CommandLineRunner {
     public void run(String... args) {
         try {
             String text = reader.readPdf();
+
+            System.out.println("========== RAW PDF TEXT START ==========");
+            System.out.println(text);
+            System.out.println("========== RAW PDF TEXT END ==========");
+
             List<EmployeeShift> data = parser.parse(text);
             excel.generate(data);
+
         } catch (Exception e) {
-            System.err.println("PDF processing failed: " + e.getMessage());
             e.printStackTrace();
         }
     }

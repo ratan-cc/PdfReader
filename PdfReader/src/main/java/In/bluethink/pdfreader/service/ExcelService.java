@@ -20,7 +20,7 @@ public class ExcelService {
 
     public void generate(List<EmployeeShift> data) throws Exception {
 
-        // ✅ Ensure output directory exists
+        // Ensure output directory exists
         File file = new File(outputPath);
         File parentDir = file.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
@@ -66,6 +66,6 @@ public class ExcelService {
 
         workbook.close();
 
-        System.out.println("✅ Excel generated at: " + file.getAbsolutePath());
+        System.out.println("Excel generated at: " + file.getAbsolutePath());
     }
 }

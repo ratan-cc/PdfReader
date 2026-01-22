@@ -7,66 +7,121 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import java.util.*;
 @Service
 public class PdfParserService {
 
-    public List<EmployeeShift> parse(String text) {
+    public List<EmployeeShift> parse(String rawText) {
 
         List<EmployeeShift> result = new ArrayList<>();
 
-        // Store number
-        Matcher storeMatcher =
-                Pattern.compile("Store\\s+#(\\d+)").matcher(text);
-        String store = storeMatcher.find() ? storeMatcher.group(1) : "";
+        // -------------------------------
+        // 1. NORMALIZE PDF TEXT
+        // -------------------------------
+        String text = rawText
+                .replace("\r", "")
+                .replaceAll("\\n+", "\n")
+                .replace("*Clock-in", "Clock-in")
+                .replaceAll("Break\\s+Clock-in", "Break Clock-in")
+                .replaceAll("Break\\s+Clock-out", "Break Clock-out");
 
-        // Employee blocks
-        Pattern empPattern = Pattern.compile(
-                "(\\d+)([A-Z ]+)\\s+HolDTOTRegID([\\s\\S]*?)(?=\\n\\d+[A-Z ]+ HolDTOTRegID|TOTAL HOURS)",
-                Pattern.MULTILINE
-        );
+        String[] lines = text.split("\n");
 
-        Matcher empMatcher = empPattern.matcher(text);
+        // -------------------------------
+        // 2. GLOBAL STORE NUMBER
+        // -------------------------------
+        String storeNumber = "";
+        Matcher storeMatcher = Pattern.compile("Store\\s+#(\\d+)").matcher(text);
+        if (storeMatcher.find()) {
+            storeNumber = storeMatcher.group(1);
+        }
 
-        while (empMatcher.find()) {
+        // -------------------------------
+        // 3. PATTERNS
+        // -------------------------------
+        Pattern employeePattern = Pattern.compile("^(\\d+)([A-Z ]+)\\s+HolDTOTRegID");
+        Pattern dayPattern = Pattern.compile("(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)");
+        Pattern timePattern = Pattern.compile("(\\d{1,2}/\\d{1,2}/\\d{2}\\s+\\d{1,2}:\\d{2}(AM|PM))");
+        Pattern jobCodePattern = Pattern.compile("(Clock-in|Break Clock-in).*?(\\d+)");
 
-            String employeeName = empMatcher.group(2).trim();
-            String block = empMatcher.group(3);
+        // -------------------------------
+        // 4. STATE VARIABLES
+        // -------------------------------
+        String employeeName = null;
+        String businessDay = null;
+        String jobCode = null;
 
-            // Business day
-            Matcher dayMatcher = Pattern.compile(
-                    "(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)"
-            ).matcher(block);
-            String businessDay = dayMatcher.find() ? dayMatcher.group() : "";
+        String lastInType = null;
+        String lastInTime = null;
 
-            // CLOCK ROW pattern (THIS IS THE FIX)
-            Pattern clockRowPattern = Pattern.compile(
-                    "(Clock-in|Break Clock-in)\\s+" +
-                            "(Break|Clock-out)\\s+" +
-                            "(\\d+)\\s+" +
-                            ".*?(\\d{1,2}:\\d{2}(AM|PM)).*?" +
-                            "(\\d{1,2}:\\d{2}(AM|PM))"
-            );
+        // -------------------------------
+        // 5. LINE-BY-LINE PARSING
+        // -------------------------------
+        for (String line : lines) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
 
-            Matcher clockMatcher = clockRowPattern.matcher(block);
+            // EMPLOYEE HEADER
+            Matcher empMatcher = employeePattern.matcher(line);
+            if (empMatcher.find()) {
+                employeeName = empMatcher.group(2).trim();
+                continue;
+            }
 
-            while (clockMatcher.find()) {
+            // BUSINESS DAY
+            Matcher dayMatcher = dayPattern.matcher(line);
+            if (dayMatcher.find()) {
+                businessDay = dayMatcher.group(1);
+            }
 
-                EmployeeShift entry = new EmployeeShift();
+            // JOB CODE
+            Matcher jobMatcher = jobCodePattern.matcher(line);
+            if (jobMatcher.find()) {
+                jobCode = jobMatcher.group(2);
+            }
 
-                entry.setStoreNumber(store);
-                entry.setName(employeeName);
-                entry.setBusinessDay(businessDay);
+            // -------------------------------
+            // CLOCK-IN / BREAK CLOCK-IN
+            // -------------------------------
+            if (line.contains("Clock-in")) {
+                Matcher timeMatcher = timePattern.matcher(line);
+                if (timeMatcher.find()) {
+                    lastInType = line.contains("Break") ? "Break Clock-in" : "Clock-in";
+                    lastInTime = timeMatcher.group(1);
+                }
+            }
 
-                entry.setInType(clockMatcher.group(1));
-                entry.setOutType(clockMatcher.group(2));
-                entry.setJobId(clockMatcher.group(3));
-                entry.setClockIn(clockMatcher.group(4));
-                entry.setClockOut(clockMatcher.group(6));
+            // -------------------------------
+            // CLOCK-OUT / BREAK CLOCK-OUT
+            // -------------------------------
+            if (line.contains("Clock-out")) {
+                Matcher timeMatcher = timePattern.matcher(line);
+                if (timeMatcher.find() && lastInTime != null) {
 
-                result.add(entry);
+                    String outType = line.contains("Break") ? "Break Clock-out" : "Clock-out";
+                    String outTime = timeMatcher.group(1);
+
+                    EmployeeShift row = new EmployeeShift();
+                    row.setStoreNumber(storeNumber);
+                    row.setName(employeeName);
+                    row.setBusinessDay(businessDay);
+                    row.setJobId(jobCode);
+                    row.setInType(lastInType);
+                    row.setOutType(outType);
+                    row.setClockIn(lastInTime);
+                    row.setClockOut(outTime);
+
+                    result.add(row);
+
+                    // RESET AFTER PAIR
+                    lastInType = null;
+                    lastInTime = null;
+                }
             }
         }
 
+        System.out.println("Parsed rows: " + result.size());
         return result;
     }
 }
